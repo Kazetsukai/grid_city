@@ -1,0 +1,6 @@
+[package]
+name = "grid_city"
+version = "0.1.0"
+authors = ["Daniel Tebbutt <moeruze.burning@gmail.com>"]
+
+[dependencies]
