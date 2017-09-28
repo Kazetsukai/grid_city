@@ -1,9 +1,18 @@
+extern crate piston;
+extern crate graphics;
+extern crate image;
+extern crate glutin_window;
+extern crate opengl_graphics;
+
+mod simulation;
+
 use piston::window::WindowSettings;
 use piston::event_loop::*;
 use piston::input::*;
 use glutin_window::GlutinWindow as Window;
-use opengl_graphics::{ GlGraphics, OpenGL };
+use opengl_graphics::{ GlGraphics, OpenGL, Texture, TextureSettings };
 
+use simulation::Simulation;
 
 pub fn run() {
 	// Change this to OpenGL::V2_1 if not working.
@@ -11,7 +20,7 @@ pub fn run() {
 
     // Create an Glutin window.
     let mut window: Window = WindowSettings::new(
-            "spinning-square",
+            "grid_city",
             [640, 480]
         )
         .opengl(opengl)
@@ -19,10 +28,13 @@ pub fn run() {
         .build()
         .unwrap();
 
+    let img = Texture::from_path("../assets/landscapeTiles_sheet.png", &TextureSettings::new()).unwrap();
+
     // Create a new game and run it.
     let mut app = App {
         gl: GlGraphics::new(opengl),
-        rotation: 0.0
+        sim: Simulation::new(),
+        img: img
     };
 
     let mut events = Events::new(EventSettings::new());
@@ -39,7 +51,8 @@ pub fn run() {
 
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend.
-    rotation: f64   // Rotation for the square.
+    sim: Simulation,
+    img: Texture
 }
 
 impl App {
@@ -50,25 +63,25 @@ impl App {
         const RED:   [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
         let square = rectangle::square(0.0, 0.0, 50.0);
-        let rotation = self.rotation;
         let (x, y) = ((args.width / 2) as f64,
                       (args.height / 2) as f64);
+
+        let img = &self.img;
 
         self.gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
             clear(BACKGROUND, gl);
 
-            let transform = c.transform.trans(x, y)
-                                       .rot_rad(rotation)
-                                       .trans(-25.0, -25.0);
+            let transform = c.transform.trans(x, y);
 
             // Draw a box rotating around the middle of the screen.
             rectangle(RED, square, transform, gl);
+
+            image(img, transform, gl);
         });
     }
 
     fn update(&mut self, args: &UpdateArgs) {
-        // Rotate 2 radians per second.
-        self.rotation += 2.0 * args.dt;
+
     }
 }

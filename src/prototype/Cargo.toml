@@ -1,0 +1,15 @@
+[package]
+name = "prototype"
+version = "0.1.0"
+authors = ["Daniel Tebbutt <moeruze.burning@gmail.com>"]
+
+[dependencies]
+piston = "0.34.0"
+image = "*"
+piston2d-graphics = "0.22.0"
+pistoncore-glutin_window = "0.40.0"
+piston2d-opengl_graphics = "0.47.0"
+
+[lib]
+name = "prototype"
+path = "lib.rs"
