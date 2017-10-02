@@ -1,6 +1,5 @@
 extern crate piston;
 extern crate graphics;
-extern crate image;
 extern crate glutin_window;
 extern crate opengl_graphics;
 
@@ -12,7 +11,7 @@ use piston::input::*;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL, Texture, TextureSettings };
 
-use simulation::Simulation;
+use simulation::{ Simulation, Building, grid_coords };
 
 pub fn run() {
 	// Change this to OpenGL::V2_1 if not working.
@@ -21,20 +20,23 @@ pub fn run() {
     // Create an Glutin window.
     let mut window: Window = WindowSettings::new(
             "grid_city",
-            [640, 480]
+            [1024, 768]
         )
         .opengl(opengl)
         .exit_on_esc(true)
         .build()
         .unwrap();
 
-    let img = Texture::from_path("../assets/landscapeTiles_sheet.png", &TextureSettings::new()).unwrap();
+    let imgs = [
+        Texture::from_path("../assets/landscapeTiles_sheet.png", &TextureSettings::new()).unwrap(),
+        Texture::from_path("../assets/buildingTiles_sheet.png", &TextureSettings::new()).unwrap(),
+    ];
 
     // Create a new game and run it.
     let mut app = App {
         gl: GlGraphics::new(opengl),
         sim: Simulation::new(),
-        img: img
+        spritesheets: imgs
     };
 
     let mut events = Events::new(EventSettings::new());
@@ -46,13 +48,17 @@ pub fn run() {
         if let Some(u) = e.update_args() {
             app.update(&u);
         }
+
+        if let Some(b) = e.button_args() {
+            app.button(&b);
+        }
     }
 }
 
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend.
     sim: Simulation,
-    img: Texture
+    spritesheets: [Texture; 2]
 }
 
 impl App {
@@ -60,28 +66,123 @@ impl App {
         use graphics::*;
 
         const BACKGROUND: [f32; 4] = [0.0, 0.2, 0.5, 1.0];
-        const RED:   [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+        const GRASS_TILE: [f64; 4] = [398.0, 265.0, 132.0, 99.0];
+        const ROAD_TILE:  [f64; 4] = [266.0, 723.0, 132.0, 99.0];
+        const HOUSE_TILE: [f64; 4] = [265.0, 254.0, 132.0, 127.0];
+        const HOUSE_ROOF: [f64; 4] = [397.0, 1149.0, 99.0, 60.0];
 
-        let square = rectangle::square(0.0, 0.0, 50.0);
-        let (x, y) = ((args.width / 2) as f64,
-                      (args.height / 2) as f64);
+        let img = Image::new();
+        let (gl, sim, spritesheets) = (&mut self.gl, &self.sim, &self.spritesheets);
 
-        let img = &self.img;
-
-        self.gl.draw(args.viewport(), |c, gl| {
+        gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
             clear(BACKGROUND, gl);
 
-            let transform = c.transform.trans(x, y);
+            let grass_tile = img.src_rect(GRASS_TILE);
+            let road_tile = img.src_rect(ROAD_TILE);
+            let house_tile = img.src_rect(HOUSE_TILE);
+            let house_roof = img.src_rect(HOUSE_ROOF);
 
-            // Draw a box rotating around the middle of the screen.
-            rectangle(RED, square, transform, gl);
+            let mut elem = 0;
 
-            image(img, transform, gl);
+            for (ref cell, coord) in sim.grid.iter().zip(grid_coords()) {
+                let (xa, ya) = coord;
+                let (x, y) = (xa as f64, ya as f64);
+
+                let transform = c.transform.trans(
+                    5.0 * GRASS_TILE[2] / 2.0,
+                    0.0
+                ).trans(
+                    x * GRASS_TILE[2] / 2.0 - y * GRASS_TILE[2] / 2.0, 
+                    y * GRASS_TILE[3] / 3.0 + x * GRASS_TILE[3] / 3.0
+                );
+
+                    
+                elem += 1;
+                if elem > 500000 { break; }
+
+                match &cell.building {
+                    &Some(Building::Residential) => {
+                        house_tile.draw(
+                            &spritesheets[1],
+                            &DrawState::default(),
+                            transform.trans(0.0, -28.0),
+                            gl,
+                        );
+                        house_roof.draw(
+                            &spritesheets[1],
+                            &DrawState::default(),
+                            transform.trans(17.0, -36.0),
+                            gl,
+                        );
+                    },
+                    &Some(Building::Road) => {
+                        road_tile.draw(
+                            &spritesheets[0],
+                            &DrawState::default(),
+                            transform,
+                            gl,
+                        );  
+                    }
+                    &None => {
+                        grass_tile.draw(
+                            &spritesheets[0],
+                            &DrawState::default(),
+                            transform,
+                            gl,
+                        );  
+                    }
+                    _ => ()
+                };
+            }
         });
     }
 
-    fn update(&mut self, args: &UpdateArgs) {
+    fn textRender(&mut self) {
+        let mut row = 0;
+        let mut elem = 0;
+        let sim = &self.sim;
 
+        for (ref cell, coord) in sim.grid.iter().zip(grid_coords()) {
+            let (x, y) = coord;
+
+            if y > row {
+                println!();
+                row = y;
+            }
+            elem += 1;
+            if elem > 10000 { break; }
+
+            /*match &cell.building {
+                &Some(Building::Residential) => print!("H"),
+                &Some(Building::Road) => print!("#"),
+                &Some(Building::Office) => print!("O"),
+                &None => print!("."),
+                _ => print!("?")
+            };*/
+
+            if cell.nav.distWork > 9 {
+               print!(">");
+            }
+            else {
+               print!("{}", cell.nav.distWork);
+            }
+        }
+
+        println!();
+    }
+
+    fn update(&mut self, args: &UpdateArgs) {
+    }
+
+    fn button(&mut self, args: &ButtonArgs) {
+        if args.state == ButtonState::Release {
+            match args.button {
+                Button::Keyboard(Key::Space) => {
+                    self.sim.tick();
+                },
+                _ => ()
+            }
+        }
     }
 }

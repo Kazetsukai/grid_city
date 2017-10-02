@@ -5,3 +5,6 @@ authors = ["Daniel Tebbutt <moeruze.burning@gmail.com>"]
 
 [dependencies]
 prototype = {path = "src/prototype"}
+
+[profile.dev]
+opt-level = 1
