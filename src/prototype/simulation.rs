@@ -4,7 +4,8 @@ use std::iter::{ FlatMap, Map };
 use std::ops::Range;
 use rnd::{ Random };
 
-const SIZE: i32 = 20;
+const SIZE: i32 = 25000;
+
 const NEIGHBOURS: [(i32, i32); 4] = [
 	          (0, -1),
 	(-1,  0),          (1,  0),
@@ -21,7 +22,14 @@ pub struct Simulation {
 
 #[derive(Default)]
 pub struct Frame {
+	pub globals: GlobalValues,
 	pub grid: Vec<Cell>
+}
+
+#[derive(Default)]
+pub struct GlobalValues {
+	pub total_work: u64,
+	pub total_workers: u64
 }
 
 #[derive(Default)]
@@ -52,7 +60,7 @@ impl Default for Building {
 impl Simulation {
 	pub fn new() -> Simulation {
 
-		println!("{:?}", size_of::<Cell>());
+		println!("{:?} bytes per cell", size_of::<Cell>());
 
 		let mut sim = Simulation { 
 			tick: 0,
@@ -79,37 +87,53 @@ impl Simulation {
 	}
 
 	pub fn tick(&mut self) {
-		println!("Ticking {}...", self.tick);
 
 		swap(&mut self.cur_frame, &mut self.prv_frame);
 
 		let old_grid = &self.prv_frame.grid;
+		let cur_grid = &mut self.cur_frame.grid;
+		let mut _globals = GlobalValues::default();
 
-		run(&mut self.cur_frame.grid, |c, (x, y)| {
+		// Simulation:
+		// - propagate distances
+		// - aggregate global values
+		run(cur_grid, |c, (x, y)| {
+			let mut globals = &mut _globals;
+
 			c.building = get_cell(&old_grid, (x, y)).unwrap().building;
 
 			match c.building {
 				Building::Road { dist_work: mut d } => {
+
+					// Propagate distances
 					let dist = NEIGHBOURS.iter()
 						.map(|&(x_a, y_a)| match get_cell(&old_grid, (x+x_a, y+y_a)) { 
 							Some(c) => match c.building {
 								Building::Road { dist_work: dist, .. } => dist,
 								Building::Office { .. } => 0,
 								_ => BIG_DIST
-							}, 
+							},
 							None => BIG_DIST
 						})
 						.min()
-						.unwrap_or(BIG_DIST) + 1;
+						.unwrap_or(BIG_DIST);
 
-					d = min(dist, BIG_DIST);
+					// Distance is the lowest neighbour + 1
+					d = min(dist + 1, BIG_DIST);
+
+				},
+				Building::Residential { population } => {
+					globals.total_workers += population as u64;
+				},
+				Building::Office { work } => {
+					globals.total_work += work as u64;
 				},
 				_ => ()
 			}
 		});
 
+		self.cur_frame.globals = _globals;
 
-		println!("Ticked {}", self.tick);
 		self.tick += 1;
 	}
 
@@ -124,7 +148,7 @@ pub fn grid_coords() -> GridIter {
 }
 
 // Run a closure over each cell in a grid
-fn run<F>(grid: &mut Vec<Cell>, f: F) where F: Fn(&mut Cell, (i32, i32)) -> () {
+fn run<F>(grid: &mut Vec<Cell>, mut f: F) where F: FnMut(&mut Cell, (i32, i32)) -> () {
     for (ref mut cell, coord) in grid.iter_mut().zip(grid_coords()) {
     	f(cell, coord);
     }

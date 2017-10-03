@@ -2,6 +2,7 @@ extern crate piston;
 extern crate graphics;
 extern crate glutin_window;
 extern crate opengl_graphics;
+extern crate time;
 
 mod simulation;
 mod rnd;
@@ -13,7 +14,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL, Texture, TextureSettings };
 
 use simulation::{ Simulation, Building, grid_coords };
-use rnd::Random;
+use time::PreciseTime;
 
 pub fn run() {
 	// Change this to OpenGL::V2_1 if not working.
@@ -38,8 +39,7 @@ pub fn run() {
     let mut app = App {
         gl: GlGraphics::new(opengl),
         sim: Simulation::new(),
-        spritesheets: imgs,
-        random: Random { index: 0 }
+        spritesheets: imgs
     };
 
     let mut events = Events::new(EventSettings::new());
@@ -61,8 +61,7 @@ pub fn run() {
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend.
     sim: Simulation,
-    spritesheets: [Texture; 2],
-    random: Random
+    spritesheets: [Texture; 2]
 }
 
 impl App {
@@ -174,6 +173,8 @@ impl App {
         }
 
         println!();
+
+        println!("Work: {} - Workers: {}", sim.cur_frame.globals.total_work, sim.cur_frame.globals.total_workers);
     }
 
     fn update(&mut self, args: &UpdateArgs) {
@@ -183,8 +184,16 @@ impl App {
         if args.state == ButtonState::Release {
             match args.button {
                 Button::Keyboard(Key::Space) => {
+
+                    println!("Ticking {}...", self.sim.tick);
+                    let start = PreciseTime::now();
+
                     self.sim.tick();
-                    self.text_render();
+
+                    let end = PreciseTime::now();
+                    println!("Ticked {} - {} seconds", self.sim.tick, start.to(end));
+
+                    //self.text_render();
                 },
                 _ => ()
             }
