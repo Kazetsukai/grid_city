@@ -4,6 +4,7 @@ extern crate glutin_window;
 extern crate opengl_graphics;
 
 mod simulation;
+mod rnd;
 
 use piston::window::WindowSettings;
 use piston::event_loop::*;
@@ -12,6 +13,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL, Texture, TextureSettings };
 
 use simulation::{ Simulation, Building, grid_coords };
+use rnd::Random;
 
 pub fn run() {
 	// Change this to OpenGL::V2_1 if not working.
@@ -36,7 +38,8 @@ pub fn run() {
     let mut app = App {
         gl: GlGraphics::new(opengl),
         sim: Simulation::new(),
-        spritesheets: imgs
+        spritesheets: imgs,
+        random: Random { index: 0 }
     };
 
     let mut events = Events::new(EventSettings::new());
@@ -58,7 +61,8 @@ pub fn run() {
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend.
     sim: Simulation,
-    spritesheets: [Texture; 2]
+    spritesheets: [Texture; 2],
+    random: Random
 }
 
 impl App {
@@ -85,7 +89,7 @@ impl App {
 
             let mut elem = 0;
 
-            for (ref cell, coord) in sim.grid.iter().zip(grid_coords()) {
+            for (ref cell, coord) in sim.cur_frame.grid.iter().zip(grid_coords()) {
                 let (xa, ya) = coord;
                 let (x, y) = (xa as f64, ya as f64);
 
@@ -101,8 +105,8 @@ impl App {
                 elem += 1;
                 if elem > 500000 { break; }
 
-                match &cell.building {
-                    &Some(Building::Residential) => {
+                match cell.building {
+                    Building::Residential { .. } => {
                         house_tile.draw(
                             &spritesheets[1],
                             &DrawState::default(),
@@ -116,7 +120,7 @@ impl App {
                             gl,
                         );
                     },
-                    &Some(Building::Road) => {
+                    Building::Road { .. } => {
                         road_tile.draw(
                             &spritesheets[0],
                             &DrawState::default(),
@@ -124,7 +128,7 @@ impl App {
                             gl,
                         );  
                     }
-                    &None => {
+                    Building::None => {
                         grass_tile.draw(
                             &spritesheets[0],
                             &DrawState::default(),
@@ -138,13 +142,13 @@ impl App {
         });
     }
 
-    fn textRender(&mut self) {
+    fn text_render(&mut self) {
         let mut row = 0;
         let mut elem = 0;
         let sim = &self.sim;
 
-        for (ref cell, coord) in sim.grid.iter().zip(grid_coords()) {
-            let (x, y) = coord;
+        for (ref cell, coord) in sim.cur_frame.grid.iter().zip(grid_coords()) {
+            let (_, y) = coord;
 
             if y > row {
                 println!();
@@ -153,20 +157,20 @@ impl App {
             elem += 1;
             if elem > 10000 { break; }
 
-            /*match &cell.building {
-                &Some(Building::Residential) => print!("H"),
-                &Some(Building::Road) => print!("#"),
-                &Some(Building::Office) => print!("O"),
-                &None => print!("."),
+            match cell.building {
+                Building::Residential { .. } => print!("H"),
+                Building::Road { .. } => print!("#"),
+                Building::Office { .. } => print!("O"),
+                Building::None => print!("."),
                 _ => print!("?")
-            };*/
+            };
 
-            if cell.nav.distWork > 9 {
+            /*if cell.nav.distWork > 9 {
                print!(">");
             }
             else {
                print!("{}", cell.nav.distWork);
-            }
+            }*/
         }
 
         println!();
@@ -180,6 +184,7 @@ impl App {
             match args.button {
                 Button::Keyboard(Key::Space) => {
                     self.sim.tick();
+                    self.text_render();
                 },
                 _ => ()
             }
